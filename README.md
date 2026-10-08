@@ -40,3 +40,38 @@ Registry authentication uses GitHub's automatic workflow token.
 
 Evidence links and screenshots are added below after the deployments
 and QA-to-production demonstration have completed.
+
+### Successful workflow runs
+
+| Environment | Workflow run | Deployed commit / image tag |
+|---|---|---|
+| QA | [Successful run](https://github.com/GerardA8/secure-deployment/actions/runs/37820619067) | `5e9b191e0220fc2bd889c357bc27be11bf0355b1` |
+| Production | [Successful run](https://github.com/GerardA8/secure-deployment/actions/runs/37820939026) | `694aa1bf97e33f8b1e481b1b7a4aaa99e3ab2c4c` |
+
+### Image registry
+
+[Container package](https://github.com/users/GerardA8/packages/container/package/secure-deployment)
+
+Image names use `ghcr.io/gerarda8/secure-deployment:<commit SHA>`.
+
+### Demonstration screenshots
+
+QA shows Release 2 while production still shows Release 1:
+
+![QA before promotion](evidence/qa-before-promotion.png)
+
+Production shows Release 2 after promotion:
+
+![Production after promotion](evidence/production-after-promotion.png)
+
+Successful SSH-key login as the non-root administrator:
+
+![SSH key login](evidence/ssh-key-login.png)
+
+Effective SSH settings and sudo access:
+
+![SSH settings](evidence/ssh-settings.png)
+
+Rejected direct root and password-only SSH logins:
+
+![Rejected SSH logins](evidence/ssh-rejected.png)
