@@ -1,0 +1,118 @@
+name: Validate Build Deploy
+
+on:
+  push:
+    branches: [main, qa]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: secure-deployment-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      IMAGE_NAME: ghcr.io/gerarda8/secure-deployment
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Validate website and deployment script
+        run: |
+          set -euo pipefail
+          test -s index.html
+          grep -qi '<!DOCTYPE html>' index.html
+          grep -q '<h1>Gerard Almenares</h1>' index.html
+          grep -q '</html>' index.html
+          bash -n deploy.sh
+
+      - name: Select deployment environment
+        run: |
+          if [ "$GITHUB_REF_NAME" = "qa" ]; then
+            echo "DEPLOY_ENV=qa" >> "$GITHUB_ENV"
+            echo "DOMAIN=qa.gerardalmenares.com" >> "$GITHUB_ENV"
+          elif [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "DEPLOY_ENV=prod" >> "$GITHUB_ENV"
+            echo "DOMAIN=gerardalmenares.com" >> "$GITHUB_ENV"
+          else
+            exit 1
+          fi
+          echo "IMAGE=$IMAGE_NAME:$GITHUB_SHA" >> "$GITHUB_ENV"
+
+      - name: Validate Compose and build Docker image
+        run: |
+          set -euo pipefail
+          docker compose config -q
+          printf '%s\n' "$GITHUB_SHA" > revision.txt
+          docker build -t "$IMAGE" .
+
+      - name: Test the built container
+        run: |
+          set -euo pipefail
+          docker run -d --name smoke -p 127.0.0.1:18080:8080 "$IMAGE"
+          trap 'docker rm -f smoke >/dev/null' EXIT
+          curl --retry 10 --retry-delay 2 --retry-all-errors \
+            --max-time 5 -fsS http://127.0.0.1:18080/ > actual.html
+          cmp index.html actual.html
+          test "$(docker exec smoke id -u)" != "0"
+          curl -fsS http://127.0.0.1:18080/revision.txt > actual-revision.txt
+          cmp revision.txt actual-revision.txt
+
+      - name: Push image to GitHub Container Registry
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REGISTRY_TOKEN" |
+            docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE"
+
+      - name: Prepare SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          HOST_KEYS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$HOST_KEYS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+      - name: Deploy to DigitalOcean
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TARGET="$SSH_USER@$SSH_HOST"
+          SSH_OPTIONS="-o BatchMode=yes -o StrictHostKeyChecking=yes"
+
+          ssh $SSH_OPTIONS "$TARGET" "mkdir -p ~/deploy-$DEPLOY_ENV"
+
+          scp $SSH_OPTIONS compose.yaml \
+            "$TARGET:deploy-$DEPLOY_ENV/compose.yaml"
+
+          printf '%s' "$REGISTRY_TOKEN" |
+            ssh $SSH_OPTIONS "$TARGET" \
+              'DOCKER_CONFIG="$HOME/.docker-ci" docker login ghcr.io -u GerardA8 --password-stdin'
+
+          ssh $SSH_OPTIONS "$TARGET" \
+            "bash -s -- '$DEPLOY_ENV' '$IMAGE' '$GITHUB_SHA'" < deploy.sh
+
+      - name: Write deployment evidence
+        run: |
+          {
+            echo "### Successful deployment"
+            echo "- Environment: $DEPLOY_ENV"
+            echo "- Website: https://$DOMAIN"
+            echo "- Commit: $GITHUB_SHA"
+            echo "- Image: $IMAGE"
+            echo "- Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } >> "$GITHUB_STEP_SUMMARY"

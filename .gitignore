@@ -1,0 +1,4 @@
+revision.txt
+.env
+*.pem
+*.key

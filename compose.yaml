@@ -1,0 +1,29 @@
+services:
+  web:
+    image: ${IMAGE}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_default"
+      - "traefik.http.routers.secure-${DEPLOY_ENV}.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.secure-${DEPLOY_ENV}.priority=100"
+      - "traefik.http.routers.secure-${DEPLOY_ENV}.entrypoints=websecure"
+      - "traefik.http.routers.secure-${DEPLOY_ENV}.tls.certresolver=le"
+      - "traefik.http.routers.secure-${DEPLOY_ENV}.service=secure-${DEPLOY_ENV}"
+      - "traefik.http.services.secure-${DEPLOY_ENV}.loadbalancer.server.port=8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+networks:
+  proxy:
+    external: true
+    name: traefik_default

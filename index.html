@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gerard Almenares | Secure Deployment</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #eef2ff;
+      color: #172554; max-width: 760px; margin: 70px auto; padding: 24px; }
+    main { background: white; padding: 36px; border-radius: 16px; }
+    p { line-height: 1.7; }
+    .release { background: #dbeafe; padding: 16px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Gerard Almenares</h1>
+    <p>NJIT IT student interested in web development and artificial intelligence.</p>
+    <h2>Secure DigitalOcean Deployment</h2>
+    <p class="release">Release 1: My automated deployment is online.</p>
+    <p id="environment"></p>
+    <p>This website runs in Docker behind Traefik with HTTPS.</p>
+    <p><a href="/revision.txt">View deployed commit</a></p>
+  </main>
+  <script>
+    document.getElementById("environment").textContent =
+      location.hostname.startsWith("qa.") ? "Environment: QA" : "Environment: Production";
+  </script>
+</body>
+</html>
